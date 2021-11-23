@@ -1,83 +1,39 @@
-global long_mode_start
-extern kernel_main
-
-section .text
-bits 64
-long_mode_start:
-    ; load null into all data segment registers
-    mov ax, 0
-    mov ss, ax
-    mov ds, ax
-    mov es, ax
-    mov fs, ax
-    mov gs, ax
-
-	call kernel_main
-    hlt
-
-
+; Defined in isr.c
 [extern isr_handler]
-
-isr_common_stub:
-    ; push general purpose registers
-    push rax
-    push rcx
-    push rdx
-    push rbx
-    push rbp
-    push rsi
-    push rdi
-
-    ; push data segment selector
-    mov ax, ds
-    push rax
-    
-    ; use kernel data segment
-    mov ax, 0x10
-    mov ds, ax
-    mov es, ax
-    mov fs, ax
-    mov gs, ax
-    ; hand over stack to C function
-    push rsp
-    ; and call it
-    call isr_handler
-    ; pop stack pointer again
-    POP rax
-
-    ; restore original segment pointers segment
-    POP rax
-    mov ds, ax
-    mov es, ax
-    mov fs, ax
-    mov gs, ax
-
-    ; restore registers
-    pop rdi    
-    pop rsi    
-    pop rbp    
-    pop rbx    
-    pop rdx    
-    pop rcx
-    pop rax
-    add esp, 8
-    iret
-
-
 [extern irq_handler]
 
+; Common ISR code
+isr_common_stub:
+    ; 1. Save CPU state
+	jmp push_a ; Pushes edi,esi,ebp,esp,ebx,edx,ecx,eax
+	mov ax, ds ; Lower 16-bits of eax = ds.
+	push rax ; save the data segment descriptor
+	mov ax, 0x10  ; kernel data segment descriptor
+	mov ds, ax
+	mov es, ax
+	mov fs, ax
+	mov gs, ax
 
+    ; 2. Call C handler
+    push rsp ; push registers_t *r pointer
+	; call isr_handler
+	pop rax ; clear pointer afterwards
+
+    ; 3. Restore state
+	pop rax
+	mov ds, ax
+	mov es, ax
+	mov fs, ax
+	mov gs, ax
+	jmp pop_a
+	add rsp, 8 ; Cleans up the pushed error code and pushed ISR number
+	iret ; pops 5 things at once: CS, EIP, EFLAGS, SS, and ESP
+
+; Common IRQ code. Identical to ISR code except for the 'call'
+; and the 'pop ebx'
 irq_common_stub:
-   ; 1. Save CPU state
-    ; start pusha macro
-    push rax
-    push rcx
-    push rdx
-    push rbx
-    push rbp
-    push rsi
-    push rdi
-    ; end pusha macro
+    ; 1. Save CPU state
+    jmp push_a
     mov ax, ds
     push rax
     mov ax, 0x10
@@ -88,7 +44,7 @@ irq_common_stub:
 
     ; 2. Call C handler
     push rsp
-    call irq_handler ; Different than the ISR code
+    ; call irq_handler ; Different than the ISR code
     pop rbx  ; Different than the ISR code
 
     ; 3. Restore state
@@ -97,7 +53,26 @@ irq_common_stub:
     mov es, bx
     mov fs, bx
     mov gs, bx
-    ; start popa macro
+    jmp pop_a
+    add rsp, 8
+    iret
+
+; We don't get information about which interrupt was caller
+; when the handler is run, so we will need to have a different handler
+; for every interrupt.
+; Furthermore, some interrupts push an error code onto the stack but others
+; don't, so we will push a dummy error code for those which don't, so that
+; we have a consistent stack for all of them.
+
+push_a:
+    push rax
+    push rcx
+    push rdx
+    push rbx
+    push rbp
+    push rsi
+    push rdi
+pop_a:
     pop rdi    
     pop rsi    
     pop rbp    
@@ -105,12 +80,8 @@ irq_common_stub:
     pop rdx    
     pop rcx
     pop rax
-    ; end popa macro
-    add rsp, 8
-    iret
 
-
-
+; First make the ISRs global
 global isr0
 global isr1
 global isr2
