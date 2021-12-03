@@ -1,6 +1,8 @@
-# krysis
+# Krysis OS
 
- `chmod +x run.sh`
- `./run.sh`
+A very minimal operating system which has a kernel written from scratch in C
 
-make sure you have gcc, nasm etc. installed
+`chmod +x run.sh`
+`./run.sh`
+
+don't really clone this repo or smth lol it's still not completed
